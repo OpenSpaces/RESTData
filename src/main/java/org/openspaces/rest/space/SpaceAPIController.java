@@ -16,48 +16,41 @@
 package org.openspaces.rest.space;
 
 
-import java.beans.PropertyEditorSupport;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import javax.servlet.http.HttpServletResponse;
-
-import com.gigaspaces.metadata.SpaceTypeDescriptorBuilder;
-import net.jini.core.lease.Lease;
-
-import org.openspaces.core.GigaSpace;
-import org.openspaces.core.space.UrlSpaceConfigurer;
-import org.openspaces.rest.exceptions.ObjectNotFoundException;
-import org.openspaces.rest.exceptions.TypeNotFoundException;
-import org.openspaces.rest.utils.ControllerUtils;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.ModelAndView;
-
 import com.gigaspaces.document.SpaceDocument;
 import com.gigaspaces.metadata.SpacePropertyDescriptor;
 import com.gigaspaces.metadata.SpaceTypeDescriptor;
+import com.gigaspaces.metadata.SpaceTypeDescriptorBuilder;
 import com.gigaspaces.query.IdQuery;
 import com.gigaspaces.query.QueryResultType;
 import com.j_spaces.core.UnknownTypeException;
 import com.j_spaces.core.client.SQLQuery;
 import com.j_spaces.core.client.UpdateModifiers;
+import net.jini.core.lease.Lease;
+import org.openspaces.core.GigaSpace;
+import org.openspaces.rest.exceptions.ObjectNotFoundException;
+import org.openspaces.rest.exceptions.TypeNotFoundException;
+import org.openspaces.rest.utils.ControllerUtils;
+import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.ModelAndView;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.Hashtable;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Spring MVC controller for the RESTful Space API
  * 
  * usage examples:
  * 	GET:
+ * 	    http://localhost:8080/rest/data/Item/_introduce_type?spaceid=customerid
+ *
  * 		http://localhost:8080/rest/data/Item/1
  * 		http://192.168.9.47:8080/rest/data/Item/_criteria?q=data2='common'
  * 
@@ -222,7 +215,7 @@ public class SpaceAPIController {
 			throw new ObjectNotFoundException("no object matched the criteria");
 		}
         Map<String, Object> result = new Hashtable<String, Object>();
-		result.put("count",cnt);
+		result.put("count", cnt);
 		return result;
 	}
 
