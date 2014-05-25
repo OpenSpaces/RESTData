@@ -58,6 +58,26 @@ public class SpaceAPIControllerTest {
     }
 
     @Test
+    public void testInroduceType() throws Exception {
+        String content = "[{\"CatalogNumber\":\"doc1\", \"Category\":\"Hardware\", \"Name\":\"Anvil1\", \"nested\": {\"nestedVar1\":\"nestedValue1\"}}, {\"CatalogNumber\":\"doc2\", \"Category\":\"Hardware\", \"Name\":\"Anvil2\"}]";
+        try {
+            String postResult = spaceAPIController.post("embeddedTestSpace", localHost, "MyType", new BufferedReader(new StringReader(content)));
+            Assert.fail("Writing to the space without introducing the class should cause TypeNotFoundException and it didn't");
+        } catch (TypeNotFoundException e) {
+            //This is the right behavior
+        }
+        Map<String, Object> introduceTypeResult = spaceAPIController.introduceType("MyType", "embeddedTestSpace", localHost, "CatalogNumber");
+        Assert.assertEquals("ok",introduceTypeResult.get("result"));
+
+        try {
+            String postResult = spaceAPIController.post("embeddedTestSpace", localHost, "MyType", new BufferedReader(new StringReader(content)));
+            // More tests for write are in testGet()
+        } catch (TypeNotFoundException e) {
+            Assert.fail("Write should not throw TypeNotFoundException after introducing the class");
+        }
+    }
+
+    @Test
     public void testGet() throws Exception {
         //write first doc
         Map<String, Object> properties1 = new HashMap<String, Object>();
@@ -71,7 +91,6 @@ public class SpaceAPIControllerTest {
         Map<String, Object> nestedProps = new HashMap<String, Object>();
         nestedProps.put("nestedVar1", "nestedValue1");
         properties1.put("nested", nestedProps);
-
         SpaceDocument document = new SpaceDocument("Product", properties1);
         gigaSpace.write(document);
 
@@ -267,6 +286,10 @@ public class SpaceAPIControllerTest {
         Assert.assertEquals("success", postResult);
 
         Assert.assertEquals(2, gigaSpace.count(null));
+
+        Map<String, Object> countResult = spaceAPIController.count("embeddedTestSpace", localHost, "Product");
+        Assert.assertEquals(2,countResult.get("count"));
+
         SpaceDocument doc1 = gigaSpace.readById(new IdQuery<SpaceDocument>("Product", "doc1",QueryResultType.DOCUMENT));
         compareMaps(properties1, doc1.getProperties());
 
@@ -283,6 +306,7 @@ public class SpaceAPIControllerTest {
         content = "[{\"CatalogNumber\":\"doc1\", \"Category\":\"Hardware\", \"Name\":\"Anvil1new\", \"nested\": {\"nestedVar1\":\"nestedValue1new\"}}, {\"CatalogNumber\":\"doc2\", \"Category\":\"Hardware\", \"Name\":\"Anvil2new\"}]";
         try{
             spaceAPIController.post("embeddedTestSpace",localHost,"Product",new  BufferedReader(new StringReader(content)));
+            Assert.fail("An action should cause an exception but it didn't");
         }catch(Exception e){
             //OK, THIS IS EXPECTED
         }
