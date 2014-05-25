@@ -16,16 +16,19 @@
 package org.openspaces.rest.space;
 
 
+import java.beans.PropertyEditorSupport;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.servlet.http.HttpServletResponse;
 
+import com.gigaspaces.metadata.SpaceTypeDescriptorBuilder;
 import net.jini.core.lease.Lease;
 
 import org.openspaces.core.GigaSpace;
@@ -33,16 +36,12 @@ import org.openspaces.core.space.UrlSpaceConfigurer;
 import org.openspaces.rest.exceptions.ObjectNotFoundException;
 import org.openspaces.rest.exceptions.TypeNotFoundException;
 import org.openspaces.rest.utils.ControllerUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
 import com.gigaspaces.document.SpaceDocument;
@@ -90,11 +89,12 @@ public class SpaceAPIController {
 	private static final String SIZE_PARAM = "s";
 	private static final String SPACE_PARAM="space";
 	private static final String LOCATORS_PARAM="locators";
+    private static final String INTRODUCE_TYPE = "_introduce_type";
+    private static final String SPACEID_PARAM = "spaceid";
 
 	private int maxReturnValues = Integer.MAX_VALUE;
-	private final Map<String,GigaSpace> connectionCache=new HashMap<String,GigaSpace>();
-	private UrlSpaceConfigurer scfg=null;
 	private static final Logger logger = Logger.getLogger(SpaceAPIController.class.getName());
+
 
 	/**
 	 * redirects to index view
@@ -104,6 +104,40 @@ public class SpaceAPIController {
 	public ModelAndView redirectToIndex(){
 		return new ModelAndView("index");
 	}
+
+
+    /**
+     * REST GET for inroducing type to space
+     * @param type type name
+     * @param space space name
+     * @param locators locators
+     * @return
+     */
+    @RequestMapping(value = "/{type}/"+INTRODUCE_TYPE, method = RequestMethod.GET, params = SPACEID_PARAM)
+    public @ResponseBody Map<String, Object> introduceType(
+            @PathVariable String type,
+            @RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
+            @RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
+            @RequestParam(value=SPACEID_PARAM, defaultValue="id") String spaceID
+    ) {
+        if(logger.isLoggable(Level.FINE))
+            logger.fine("intoducing type: "+type+" to "+space);
+
+        Map<String, Object> result = new Hashtable<String, Object>();
+        try {
+            GigaSpace gigaSpace = ControllerUtils.xapCache.get(space, locators);
+            SpaceTypeDescriptor spaceTypeDescriptor = new SpaceTypeDescriptorBuilder(type).idProperty(spaceID)
+                    .routingProperty(spaceID).supportsDynamicProperties(true).create();
+            gigaSpace.getTypeManager().registerTypeDescriptor(spaceTypeDescriptor);
+            result.put("result","ok");
+        } catch (Exception e) {
+            result.put("result","error");
+            result.put("exception", e);
+        }
+
+        return result;
+    }
+
 
 	/**
 	 * REST GET by query request handler
@@ -116,7 +150,7 @@ public class SpaceAPIController {
 	@RequestMapping(value = "/{type}/" + CRITERIA_KEYWORD, method = RequestMethod.GET, params=QUERY_PARAM)
 	public @ResponseBody Map<String, Object>[] getByQuery(
 			@PathVariable String type, 
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@RequestParam(value=QUERY_PARAM) String query,
 			@RequestParam(value=SIZE_PARAM, required=false) Integer size) throws ObjectNotFoundException{
@@ -153,7 +187,7 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}/{id}", method = RequestMethod.GET)
 	public @ResponseBody Map<String, Object> getById(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type,
 			@PathVariable String id) throws ObjectNotFoundException{
@@ -176,11 +210,10 @@ public class SpaceAPIController {
 	 * 
 	 */
 	@RequestMapping(value = "/{type}/count", method = RequestMethod.GET)
-	public ModelAndView count(
-			@RequestParam(value=SPACE_PARAM) String space,
+	public Map<String, Object> count(
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
-			@PathVariable String type,
-			HttpServletResponse response) throws ObjectNotFoundException{
+			@PathVariable String type) throws ObjectNotFoundException{
 		
 		GigaSpace gigaSpace=ControllerUtils.xapCache.get(space,locators);
 		//read by id request
@@ -188,10 +221,9 @@ public class SpaceAPIController {
 		if (cnt == null){
 			throw new ObjectNotFoundException("no object matched the criteria");
 		}
-		ModelAndView mv=new ModelAndView("jsonView");
-		mv.addObject("count",cnt);
-		response.setHeader("Access-Control-Allow-Origin","*");
-		return mv;
+        Map<String, Object> result = new Hashtable<String, Object>();
+		result.put("count",cnt);
+		return result;
 	}
 
 
@@ -205,11 +237,11 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}", method = RequestMethod.GET)
 	public @ResponseBody Map<String, Object>[]  getByType(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type,
 			@RequestParam(value=SIZE_PARAM, required=false) Integer size)throws ObjectNotFoundException{
-		return getByQuery(type,space,locators, "", size);
+		return getByQuery(type, space, locators, "", size);
 	}
 
 	private Object getTypeBasedIdObject(GigaSpace gigaSpace,String type, String id) {
@@ -239,7 +271,7 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}/{id}", method = RequestMethod.DELETE)
 	public @ResponseBody Map<String, Object> deleteById(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type,
 			@PathVariable String id) throws ObjectNotFoundException {
@@ -265,7 +297,7 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}/" + CRITERIA_KEYWORD, method = RequestMethod.DELETE, params=QUERY_PARAM)
 	public @ResponseBody Map<String, Object>[] deleteByQuery(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type, 
 			@RequestParam(value=QUERY_PARAM) String query,
@@ -288,7 +320,6 @@ public class SpaceAPIController {
 	/**
 	 * REST DELETE by type request handler 
 	 * @param type
-	 * @param query
 	 * @return
 	 */
 	@RequestMapping(value = "/{space}/{locators}/{type}", method = RequestMethod.DELETE)
@@ -310,7 +341,7 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}", method = RequestMethod.POST)
 	public @ResponseBody String post(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type,
 			BufferedReader reader) 
@@ -333,7 +364,7 @@ public class SpaceAPIController {
 	 */
 	@RequestMapping(value = "/{type}", method = RequestMethod.PUT)
 	public @ResponseBody String put(
-			@RequestParam(value=SPACE_PARAM) String space,
+			@RequestParam(value=SPACE_PARAM , defaultValue="${defaultSpaceName}") String space,
 			@RequestParam(value=LOCATORS_PARAM,defaultValue="localhost") String locators,
 			@PathVariable String type,
 			BufferedReader reader) 
